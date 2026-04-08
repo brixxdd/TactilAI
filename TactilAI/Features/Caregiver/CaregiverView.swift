@@ -20,6 +20,7 @@ struct CaregiverView: View {
     @State private var barHeights: [CGFloat] = [22, 22, 10, 38, 10, 22, 22]
     @State private var isSending = false
     @State private var selectedChipIndex: Int? = nil
+    @ObservedObject private var adaptiveModel = AdaptivePatternModel.shared
 
     private let vocabulary = ["Buenos días", "¿Cómo estás?", "Hora de comer", "¿Dormiste bien?"]
 
@@ -77,6 +78,7 @@ struct CaregiverView: View {
                     quickMessagesSection
                     composeCard
                     hapticPreviewCard
+                    aiStatsCard
                     emergencyButton
                 }
                 .padding(.horizontal, 20)
@@ -448,7 +450,122 @@ struct CaregiverView: View {
         .glassCardAccent(color: Color(hex: "7B6EF6"))
     }
 
-    // MARK: - 6. Emergencia
+    // MARK: - 6. AI Stats Card
+
+    private var aiStatsCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            // Header
+            HStack {
+                Image(systemName: "brain.head.profile")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color(hex: "4ECDC4"))
+                Text("IA Adaptativa")
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.7))
+                Spacer()
+
+                // Status pill
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(aiStatusColor)
+                        .frame(width: 6, height: 6)
+                        .shadow(color: aiStatusColor.opacity(0.6), radius: 4)
+                    Text(adaptiveModel.modelStatus.rawValue)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(aiStatusColor)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(aiStatusColor.opacity(0.12))
+                .overlay(
+                    Capsule()
+                        .stroke(aiStatusColor.opacity(0.3), lineWidth: 1)
+                )
+                .clipShape(Capsule())
+            }
+
+            // Accuracy + Interactions row
+            HStack(spacing: 16) {
+                // Accuracy
+                VStack(spacing: 6) {
+                    Text("\(Int(adaptiveModel.modelAccuracy * 100))%")
+                        .font(.system(size: 28, weight: .heavy, design: .rounded))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [Color(hex: "4ECDC4"), Color(hex: "7B6EF6")],
+                                startPoint: .leading, endPoint: .trailing
+                            )
+                        )
+                    Text("Precisión")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.4))
+                }
+                .frame(maxWidth: .infinity)
+
+                // Divider
+                Rectangle()
+                    .fill(Color.white.opacity(0.1))
+                    .frame(width: 1, height: 40)
+
+                // Interactions
+                VStack(spacing: 6) {
+                    Text("\(adaptiveModel.interactionCount)")
+                        .font(.system(size: 28, weight: .heavy, design: .rounded))
+                        .foregroundStyle(.white)
+                    Text("Interacciones")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.4))
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .padding(.vertical, 4)
+
+            // Adaptation progress
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("Adaptación")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.4))
+                    Spacer()
+                    Text("\(Int(adaptiveModel.adaptationProgress * 100))%")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Color(hex: "7B6EF6"))
+                }
+
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(Color.white.opacity(0.08))
+
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color(hex: "7B6EF6"), Color(hex: "4ECDC4")],
+                                    startPoint: .leading, endPoint: .trailing
+                                )
+                            )
+                            .frame(width: geo.size.width * adaptiveModel.adaptationProgress)
+                            .shadow(color: Color(hex: "7B6EF6").opacity(0.4), radius: 4)
+                            .animation(.easeInOut(duration: 0.5), value: adaptiveModel.adaptationProgress)
+                    }
+                }
+                .frame(height: 6)
+            }
+        }
+        .padding(16)
+        .glassCardAccent(color: Color(hex: "4ECDC4"))
+    }
+
+    private var aiStatusColor: Color {
+        switch adaptiveModel.modelStatus {
+        case .ready, .coreMLReady: return Color(hex: "4ECDC4")
+        case .training:            return Color(hex: "FF9500")
+        case .notTrained:          return Color(hex: "7B6EF6")
+        case .error:               return Color(hex: "FF453A")
+        }
+    }
+
+    // MARK: - 7. Emergencia
 
     private var emergencyButton: some View {
         Button {
@@ -489,6 +606,36 @@ struct CaregiverView: View {
                 animatePreview.toggle()
                 randomizeBars()
             }
+
+            // Registrar interacción en el modelo adaptativo
+            let patternID = mapToPatternID(text)
+            adaptiveModel.recordInteraction(
+                patternID: patternID,
+                zone: mapToZone(patternID),
+                durationMs: Double.random(in: 300...800),
+                pressureLevel: 0.5,
+                responseTime: 0,
+                confirmedByCaregiver: true
+            )
+        }
+    }
+
+    private func mapToPatternID(_ message: String) -> String {
+        let lower = message.lowercased()
+        if lower.contains("buenos") || lower.contains("hola") { return "greeting" }
+        if lower.contains("cómo") || lower.contains("estás") { return "greeting" }
+        if lower.contains("comer") || lower.contains("hora") { return "help" }
+        if lower.contains("dormiste") || lower.contains("bien") { return "yes" }
+        return "greeting"
+    }
+
+    private func mapToZone(_ patternID: String) -> Int {
+        switch patternID {
+        case "yes": return 0
+        case "no": return 1
+        case "help": return 2
+        case "sos": return 3
+        default: return 0
         }
     }
 

@@ -234,6 +234,24 @@ struct JuliaView: View {
             checkPanicPattern()
         }
 
+        // Registrar en modelo adaptativo
+        let zoneIndex = zones.firstIndex(where: { $0.label == label }) ?? 0
+        let patternID: String = switch zoneIndex {
+        case 0: "yes"
+        case 1: "no"
+        case 2: "help"
+        case 3: "sos"
+        default: "yes"
+        }
+        AdaptivePatternModel.shared.recordInteraction(
+            patternID: patternID,
+            zone: zoneIndex,
+            durationMs: Double.random(in: 200...600),
+            pressureLevel: 0.6,
+            responseTime: Double.random(in: 100...500),
+            confirmedByCaregiver: false
+        )
+
         pulseAmount = 1.0
         withAnimation(.easeIn(duration: 0.15)) {
             showOverlay = true
