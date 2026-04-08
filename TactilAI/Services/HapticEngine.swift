@@ -36,6 +36,14 @@ final class HapticEngine {
         "Bien": [
             (intensity: 0.5, sharpness: 0.3, duration: 0.2, relativeTime: 0.0),
             (intensity: 0.5, sharpness: 0.3, duration: 0.2, relativeTime: 0.25)
+        ],
+        // "Pánico" — 5 pulsos fuertes muy rápidos, señal inequívoca de emergencia
+        "Pánico": [
+            (intensity: 1.0, sharpness: 1.0, duration: 0.12, relativeTime: 0.0),
+            (intensity: 1.0, sharpness: 1.0, duration: 0.12, relativeTime: 0.15),
+            (intensity: 1.0, sharpness: 1.0, duration: 0.12, relativeTime: 0.30),
+            (intensity: 1.0, sharpness: 1.0, duration: 0.12, relativeTime: 0.45),
+            (intensity: 1.0, sharpness: 1.0, duration: 0.12, relativeTime: 0.60)
         ]
     ]
 
