@@ -1,8 +1,16 @@
 import SwiftUI
 
 struct ContentView: View {
+    @AppStorage("tutorialCompleted") private var tutorialCompleted = false
+
     var body: some View {
-        MainTabView()
+        if tutorialCompleted {
+            MainTabView()
+        } else {
+            TutorialView {
+                tutorialCompleted = true
+            }
+        }
     }
 }
 
