@@ -20,6 +20,8 @@ struct CaregiverView: View {
     @State private var barHeights: [CGFloat] = [22, 22, 10, 38, 10, 22, 22]
     @State private var isSending = false
     @State private var selectedChipIndex: Int? = nil
+    @AppStorage("tutorialCompleted") private var tutorialCompleted = true
+    @FocusState private var isTextFieldFocused: Bool
     @ObservedObject private var adaptiveModel = AdaptivePatternModel.shared
 
     private let vocabulary = ["Buenos días", "¿Cómo estás?", "Hora de comer", "¿Dormiste bien?"]
@@ -84,6 +86,8 @@ struct CaregiverView: View {
                 .padding(.horizontal, 20)
                 .padding(.bottom, 24)
             }
+            .scrollDismissesKeyboard(.interactively)
+            .onTapGesture { isTextFieldFocused = false }
         }
         .onChange(of: speechService.transcript) { _, newValue in
             messageText = newValue
@@ -146,16 +150,24 @@ struct CaregiverView: View {
             }
             Spacer()
 
-            // Icono settings con glow
-            ZStack {
-                Image(systemName: "gearshape.fill")
-                    .font(.system(size: 20))
-                    .foregroundStyle(Color(hex: "7B6EF6").opacity(0.3))
-                    .blur(radius: 6)
+            // Menú de settings
+            Menu {
+                Button {
+                    tutorialCompleted = false
+                } label: {
+                    Label("Repetir tutorial", systemImage: "arrow.counterclockwise")
+                }
+            } label: {
+                ZStack {
+                    Image(systemName: "gearshape.fill")
+                        .font(.system(size: 20))
+                        .foregroundStyle(Color(hex: "7B6EF6").opacity(0.3))
+                        .blur(radius: 6)
 
-                Image(systemName: "gearshape.fill")
-                    .font(.system(size: 18))
-                    .foregroundStyle(.white.opacity(0.4))
+                    Image(systemName: "gearshape.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(.white.opacity(0.4))
+                }
             }
         }
         .padding(.top, 56)
@@ -293,6 +305,9 @@ struct CaregiverView: View {
                     TextField("Escribe un mensaje...", text: $messageText)
                         .font(.system(size: 15))
                         .foregroundStyle(.white)
+                        .focused($isTextFieldFocused)
+                        .submitLabel(.send)
+                        .onSubmit { sendMessage() }
 
                     if !messageText.isEmpty {
                         Button {
@@ -595,6 +610,7 @@ struct CaregiverView: View {
     // MARK: - Acciones
 
     private func sendMessage() {
+        isTextFieldFocused = false
         let text = messageText
         messageText = ""
         isSending = true

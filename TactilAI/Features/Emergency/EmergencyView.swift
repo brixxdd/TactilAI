@@ -272,7 +272,7 @@ struct EmergencyView: View {
                     .font(.system(size: 13))
                     .foregroundStyle(.white.opacity(0.4))
             } else {
-                Text("Llama y envía SMS de emergencia")
+                Text("Llamada directa de emergencia")
                     .font(.system(size: 13))
                     .foregroundStyle(.white.opacity(0.4))
             }
@@ -284,22 +284,44 @@ struct EmergencyView: View {
 
     private var distressMessagesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
+            // Sección de llamadas
             HStack(spacing: 6) {
-                Image(systemName: "message.badge.waveform.fill")
+                Image(systemName: "phone.arrow.up.right.fill")
                     .font(.system(size: 12))
                     .foregroundStyle(Color(hex: "FF9500"))
-                Text("Mensajes de malestar")
+                Text("Llamada de malestar")
                     .font(.system(size: 15, weight: .bold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.7))
             }
 
-            Text("Envía un SMS rápido a tu contacto")
+            Text("Llama directamente a tu contacto")
                 .font(.system(size: 12))
                 .foregroundStyle(.white.opacity(0.35))
 
             VStack(spacing: 10) {
-                ForEach(EmergencyService.distressMessages, id: \.message) { item in
-                    distressButton(message: item.message, icon: item.icon, colorHex: item.color)
+                ForEach(EmergencyService.distressMessages.prefix(2), id: \.message) { item in
+                    distressCallButton(message: item.message, icon: item.icon, colorHex: item.color)
+                }
+            }
+
+            // Sección de SMS
+            HStack(spacing: 6) {
+                Image(systemName: "message.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color(hex: "7B6EF6"))
+                Text("Mensaje de malestar")
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.7))
+            }
+            .padding(.top, 8)
+
+            Text("Envía un SMS a tu contacto")
+                .font(.system(size: 12))
+                .foregroundStyle(.white.opacity(0.35))
+
+            VStack(spacing: 10) {
+                ForEach(EmergencyService.distressMessages.suffix(2), id: \.message) { item in
+                    distressSMSButton(message: item.message, icon: item.icon, colorHex: item.color)
                 }
             }
         }
@@ -307,10 +329,10 @@ struct EmergencyView: View {
         .glassCard()
     }
 
-    private func distressButton(message: String, icon: String, colorHex: String) -> some View {
+    private func distressCallButton(message: String, icon: String, colorHex: String) -> some View {
         let color = Color(hex: colorHex)
         return Button {
-            sendDistress(message: message)
+            sendDistressCall(message: message)
         } label: {
             HStack(spacing: 12) {
                 ZStack {
@@ -329,7 +351,42 @@ struct EmergencyView: View {
 
                 Spacer()
 
-                Image(systemName: "arrow.up.message.fill")
+                Image(systemName: "phone.arrow.up.right.fill")
+                    .font(.system(size: 14))
+                    .foregroundStyle(color.opacity(0.6))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .glassCardAccent(cornerRadius: 16, color: color)
+        }
+        .buttonStyle(.plain)
+        .disabled(!emergencyService.hasContact)
+        .opacity(emergencyService.hasContact ? 1.0 : 0.4)
+    }
+
+    private func distressSMSButton(message: String, icon: String, colorHex: String) -> some View {
+        let color = Color(hex: colorHex)
+        return Button {
+            sendDistressSMS(message: message)
+        } label: {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(color.opacity(0.15))
+                        .frame(width: 40, height: 40)
+
+                    Image(systemName: icon)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(color)
+                }
+
+                Text(message)
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white)
+
+                Spacer()
+
+                Image(systemName: "message.fill")
                     .font(.system(size: 14))
                     .foregroundStyle(color.opacity(0.6))
             }
@@ -348,7 +405,7 @@ struct EmergencyView: View {
         HStack(spacing: 8) {
             Image(systemName: "info.circle")
                 .font(.system(size: 12))
-            Text("Las llamadas y SMS se abren en las apps nativas de tu iPhone")
+            Text("Todas las emergencias inician una llamada directa al contacto")
                 .font(.system(size: 11))
         }
         .foregroundStyle(.white.opacity(0.25))
@@ -484,7 +541,7 @@ struct EmergencyView: View {
         emergencyService.triggerSOS()
 
         withAnimation(.easeIn(duration: 0.15)) {
-            sentMessage = "SOS enviado"
+            sentMessage = "Llamando al contacto..."
         }
 
         startCooldown()
@@ -495,12 +552,23 @@ struct EmergencyView: View {
         }
     }
 
-    private func sendDistress(message: String) {
-        HapticEngine.shared.play(word: "Ayuda")
+    private func sendDistressCall(message: String) {
         emergencyService.sendDistressMessage(message)
 
         withAnimation(.easeIn(duration: 0.15)) {
-            sentMessage = "Mensaje enviado"
+            sentMessage = "Llamando al contacto..."
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            withAnimation { sentMessage = nil }
+        }
+    }
+
+    private func sendDistressSMS(message: String) {
+        emergencyService.sendDistressSMS(message)
+
+        withAnimation(.easeIn(duration: 0.15)) {
+            sentMessage = "Abriendo mensaje..."
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {

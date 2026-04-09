@@ -21,7 +21,7 @@ struct TutorialView: View {
         TutorialStep(word: "Sí", description: "Esto significa SÍ", hapticKey: "Sí", expectedZone: 0),
         TutorialStep(word: "No", description: "Esto significa NO", hapticKey: "No", expectedZone: 1),
         TutorialStep(word: "Necesito algo", description: "Esto significa NECESITO ALGO", hapticKey: "Ayuda", expectedZone: 2),
-        TutorialStep(word: "Bien", description: "Esto significa BIEN", hapticKey: "Bien", expectedZone: 3)
+        TutorialStep(word: "Emergencia", description: "Esto significa EMERGENCIA", hapticKey: "Emergencia", expectedZone: 3)
     ]
 
     var body: some View {

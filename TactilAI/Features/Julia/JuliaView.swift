@@ -20,6 +20,11 @@ struct JuliaView: View {
     private let panicThreshold = 3
     private let panicWindow: TimeInterval = 1.5
 
+    // Detección de shake desesperado: 3 shakes en 4 segundos → llamada directa
+    @State private var shakeTimestamps: [Date] = []
+    private let desperateShakeThreshold = 3
+    private let desperateShakeWindow: TimeInterval = 4.0
+
     // Comandos de voz
     @State private var speechService = SpeechService()
     @State private var voiceCommandService = VoiceCommandService()
@@ -110,10 +115,7 @@ struct JuliaView: View {
         }
         .fontDesign(.rounded)
         .onShake {
-            // Agitar el teléfono activa la escucha de voz
-            if !speechService.isListening {
-                handleVoiceTap()
-            }
+            handleShake()
         }
         .onChange(of: speechService.transcript) { _, newValue in
             processVoiceCommand(transcript: newValue)
@@ -570,6 +572,46 @@ struct JuliaView: View {
         }
         .transition(.opacity)
         .allowsHitTesting(false)
+    }
+
+    // MARK: - Shake Detection
+
+    private func handleShake() {
+        let now = Date()
+        shakeTimestamps.append(now)
+
+        // Filtrar solo shakes dentro de la ventana de tiempo
+        shakeTimestamps = shakeTimestamps.filter {
+            now.timeIntervalSince($0) <= desperateShakeWindow
+        }
+
+        // Shake desesperado: 3+ shakes rápidos → llamada directa
+        if shakeTimestamps.count >= desperateShakeThreshold && !panicTriggered {
+            shakeTimestamps.removeAll()
+            panicTriggered = true
+            HapticEngine.shared.play(word: "Pánico")
+
+            // Detener escucha si estaba activa
+            if speechService.isListening {
+                speechService.stopListening()
+            }
+
+            // Llamada directa sin confirmación
+            if emergencyService.hasContact {
+                emergencyService.triggerSOS()
+            }
+
+            // Reset después del cooldown
+            DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+                panicTriggered = false
+            }
+            return
+        }
+
+        // Shake normal: activa escucha de voz
+        if !speechService.isListening && !panicTriggered {
+            handleVoiceTap()
+        }
     }
 
     // MARK: - Voice Actions

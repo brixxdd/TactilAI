@@ -49,15 +49,14 @@ final class EmergencyService {
         ("Necesito mi medicina", "pills.fill", "7B6EF6")
     ]
 
-    // MARK: - Llamar al contacto de emergencia
+    // MARK: - Llamar al contacto de emergencia (sin cooldown, acción directa)
 
     func callEmergencyContact() {
-        guard hasContact, canTrigger else { return }
+        guard hasContact else { return }
         let cleaned = contactPhone.replacingOccurrences(
             of: "[^0-9+]", with: "", options: .regularExpression
         )
         guard let url = URL(string: "tel://\(cleaned)") else { return }
-        lastTriggerDate = Date()
         UIApplication.shared.open(url)
     }
 
@@ -73,28 +72,29 @@ final class EmergencyService {
         UIApplication.shared.open(url)
     }
 
-    // MARK: - SOS completo: llamada + SMS
+    // MARK: - SOS completo: llamada directa
 
     func triggerSOS() {
         guard hasContact, canTrigger else { return }
         lastTriggerDate = Date()
         HapticEngine.shared.play(word: "Pánico")
-
-        // Enviar SMS primero, luego llamar
-        let sosMessage = "🚨 EMERGENCIA: \(contactName.isEmpty ? "Tu contacto" : contactName) necesita ayuda urgente. Enviado desde TactilAI."
-        sendSMS(message: sosMessage)
-
-        // Pequeño delay para que el SMS se abra primero
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [self] in
-            callEmergencyContact()
-        }
+        callEmergencyContact()
     }
 
-    // MARK: - Enviar mensaje de malestar
+    // MARK: - Mensaje de malestar → llamada directa
 
     func sendDistressMessage(_ message: String) {
         guard hasContact else { return }
-        let fullMessage = "⚠️ \(message). — Enviado desde TactilAI por \(contactName.isEmpty ? "usuario" : contactName)"
+        HapticEngine.shared.play(word: "Ayuda")
+        callEmergencyContact()
+    }
+
+    // MARK: - Mensaje de malestar → SMS (para demostración)
+
+    func sendDistressSMS(_ message: String) {
+        guard hasContact else { return }
+        HapticEngine.shared.play(word: "Ayuda")
+        let fullMessage = "\u{26A0}\u{FE0F} \(message). — Enviado desde TactilAI por \(contactName.isEmpty ? "usuario" : contactName)"
         sendSMS(message: fullMessage)
     }
 }
