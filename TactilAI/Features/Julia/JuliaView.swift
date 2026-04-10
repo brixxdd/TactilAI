@@ -13,19 +13,16 @@ struct JuliaView: View {
     @State private var pulseAmount: CGFloat = 1.0
     @State private var glowPhase: Bool = false
 
-    // Detección de pánico: 3 toques rápidos en zona Emergencia
     @State private var emergencyTapTimestamps: [Date] = []
     @State private var panicTriggered: Bool = false
     @State private var emergencyService = EmergencyService()
     private let panicThreshold = 3
     private let panicWindow: TimeInterval = 1.5
 
-    // Detección de shake desesperado: 3 shakes en 4 segundos → llamada directa
     @State private var shakeTimestamps: [Date] = []
     private let desperateShakeThreshold = 3
     private let desperateShakeWindow: TimeInterval = 4.0
 
-    // Comandos de voz
     @State private var speechService = SpeechService()
     @State private var voiceCommandService = VoiceCommandService()
     @State private var voiceCommandFeedback: String?
@@ -35,6 +32,14 @@ struct JuliaView: View {
     @State private var bubbleRing1: CGFloat = 1.0
     @State private var bubbleRing2: CGFloat = 1.0
     @State private var bubbleRing3: CGFloat = 1.0
+
+    @State private var voiceButtonTaps: [Date] = []
+    private let tripleTapThreshold = 3
+    private let tripleTapWindow: TimeInterval = 0.6
+
+    @State private var appState = AppState.shared
+    @State private var showHelpOverlay: Bool = false
+    @State private var helpText: String = ""
 
     private let zones = TactileZoneData.zones
 
@@ -111,6 +116,11 @@ struct JuliaView: View {
             // Overlay de comando de voz detectado
             if showVoiceOverlay, let feedback = voiceCommandFeedback {
                 voiceCommandOverlay(message: feedback)
+            }
+
+            // Overlay de ayuda
+            if showHelpOverlay {
+                helpOverlay
             }
         }
         .fontDesign(.rounded)
@@ -492,12 +502,11 @@ struct JuliaView: View {
 
     private var voiceButton: some View {
         Button {
-            handleVoiceTap()
+            handleVoiceButtonTap()
         } label: {
             HStack(spacing: 10) {
                 ZStack {
                     if speechService.isListening {
-                        // Onda pulsante cuando escucha
                         Circle()
                             .fill(Color(hex: "7B6EF6").opacity(0.3))
                             .frame(width: 32, height: 32)
@@ -521,8 +530,8 @@ struct JuliaView: View {
                         .foregroundStyle(.white)
 
                     if !speechService.isListening {
-                        Text("Agita el teléfono o toca aquí")
-                            .font(.system(size: 11, weight: .medium))
+                        Text("Toca 3 veces → ayuda | Toca aquí → hablar")
+                            .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(.white.opacity(0.35))
                     }
                 }
@@ -534,7 +543,7 @@ struct JuliaView: View {
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(.white.opacity(0.4))
                         .lineLimit(1)
-                        .frame(maxWidth: 120, alignment: .trailing)
+                        .frame(maxWidth: 100, alignment: .trailing)
                 }
             }
             .padding(.horizontal, 18)
@@ -546,6 +555,31 @@ struct JuliaView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(speechService.isListening ? "Escuchando. Toca para detener" : "Activar comandos de voz")
+    }
+
+    private func handleVoiceButtonTap() {
+        let now = Date()
+        voiceButtonTaps.append(now)
+
+        voiceButtonTaps = voiceButtonTaps.filter {
+            now.timeIntervalSince($0) <= tripleTapWindow
+        }
+
+        if voiceButtonTaps.count >= tripleTapThreshold {
+            voiceButtonTaps.removeAll()
+            HapticEngine.shared.playTripleTapFeedback()
+            showHelpOverlay = true
+            return
+        }
+
+        if voiceButtonTaps.count == 1 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + tripleTapWindow) {
+                if self.voiceButtonTaps.count > 0 && self.voiceButtonTaps.count < self.tripleTapThreshold {
+                    self.voiceButtonTaps.removeAll()
+                    self.handleVoiceTap()
+                }
+            }
+        }
     }
 
     // MARK: - Voice Command Overlay
@@ -635,25 +669,27 @@ struct JuliaView: View {
     private func processVoiceCommand(transcript: String) {
         guard !transcript.isEmpty else { return }
 
-        // Cancelar el debounce anterior — cada cambio reinicia el timer
         voiceDebounceTask?.cancel()
 
-        // Esperar 1.2s de silencio para que la frase se complete
         voiceDebounceTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(1.2))
 
-            // Verificar que no fue cancelado y que seguimos escuchando
             guard !Task.isCancelled,
                   speechService.isListening || !transcript.isEmpty,
                   transcript != lastProcessedTranscript else { return }
 
             guard let command = voiceCommandService.detectCommand(in: transcript) else { return }
 
-            // Marcar como procesado y detener escucha
             lastProcessedTranscript = transcript
             speechService.stopListening()
 
             switch command {
+            case .navigate(let destination):
+                handleNavigation(destination)
+
+            case .action(let action):
+                handleVoiceAction(action)
+
             case .sos:
                 voiceCommandFeedback = "SOS Activado"
                 HapticEngine.shared.play(word: "Pánico")
@@ -675,7 +711,6 @@ struct JuliaView: View {
                 HapticEngine.shared.play(word: "No")
             }
 
-            // Mostrar overlay de confirmación
             withAnimation(.easeIn(duration: 0.15)) {
                 showVoiceOverlay = true
             }
@@ -684,6 +719,58 @@ struct JuliaView: View {
                     showVoiceOverlay = false
                     voiceCommandFeedback = nil
                 }
+            }
+        }
+    }
+
+    private func handleNavigation(_ destination: TabDestination) {
+        HapticEngine.shared.playNavigationFeedback()
+        
+        switch destination {
+        case .home:
+            voiceCommandFeedback = "Yendo a Inicio"
+        case .patterns:
+            voiceCommandFeedback = "Yendo a Patrones"
+        case .emergency:
+            voiceCommandFeedback = "Yendo a Emergencia"
+        }
+        
+        appState.selectedTab = destination
+    }
+
+    private func handleVoiceAction(_ action: VoiceAction) {
+        HapticEngine.shared.playNavigationFeedback()
+        
+        switch action {
+        case .triggerSOS:
+            voiceCommandFeedback = "Activando SOS"
+            HapticEngine.shared.play(word: "Pánico")
+            if emergencyService.hasContact {
+                emergencyService.triggerSOS()
+            }
+            
+        case .call:
+            voiceCommandFeedback = "Llamando..."
+            if emergencyService.hasContact {
+                emergencyService.triggerSOS()
+            }
+            
+        case .sendMessage:
+            voiceCommandFeedback = "Yendo a Inicio"
+            appState.selectedTab = .home
+            
+        case .sendSMS:
+            voiceCommandFeedback = "Abriendo mensaje"
+            appState.selectedTab = .emergency
+            
+        case .playPattern:
+            voiceCommandFeedback = "Reproduciendo"
+            HapticEngine.shared.play(word: "Bien")
+            
+        case .help:
+            voiceCommandFeedback = "Mostrando ayuda"
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                withAnimation { showHelpOverlay = true }
             }
         }
     }
@@ -715,6 +802,68 @@ struct JuliaView: View {
         }
         .transition(.opacity)
         .allowsHitTesting(false)
+    }
+
+    // MARK: - Help Overlay
+
+    private var helpOverlay: some View {
+        ZStack {
+            Color(hex: "7B6EF6").opacity(0.25)
+                .ignoresSafeArea()
+
+            VStack(spacing: 16) {
+                Image(systemName: "lightbulb.fill")
+                    .font(.system(size: 40, weight: .bold))
+                    .foregroundStyle(Color(hex: "FF9500"))
+                    .shadow(color: Color(hex: "FF9500").opacity(0.5), radius: 12)
+
+                Text("Comandos de Voz")
+                    .font(.system(size: 20, weight: .heavy, design: .rounded))
+                    .foregroundStyle(.white)
+
+                VStack(alignment: .leading, spacing: 10) {
+                    helpRow(icon: "location.fill", text: "'Ve a inicio' → Ir a Inicio")
+                    helpRow(icon: "hand.tap.fill", text: "'Ve a patrones' → Ir a Patrones")
+                    helpRow(icon: "exclamationmark.triangle.fill", text: "'Ve a emergencia' → Ir a Emergencia")
+                    Divider().background(Color.white.opacity(0.2))
+                    helpRow(icon: "waveform", text: "'Emergencia' → Activar SOS")
+                    helpRow(icon: "cross.fill", text: "'Me duele...' → Enviar malestar")
+                    helpRow(icon: "hand.raised.fill", text: "'Sí' o 'No' → Responder")
+                }
+                .padding(.horizontal, 8)
+
+                Button {
+                    withAnimation { showHelpOverlay = false }
+                } label: {
+                    Text("Entendido")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 10)
+                        .background(Color(hex: "7B6EF6"))
+                        .clipShape(Capsule())
+                }
+                .padding(.top, 8)
+            }
+            .padding(24)
+            .glassCard()
+        }
+        .transition(.opacity)
+        .onTapGesture {
+            withAnimation { showHelpOverlay = false }
+        }
+    }
+
+    private func helpRow(icon: String, text: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 14))
+                .foregroundStyle(Color(hex: "4ECDC4"))
+                .frame(width: 24)
+            Text(text)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.white.opacity(0.85))
+        }
     }
 
     // MARK: - Helpers

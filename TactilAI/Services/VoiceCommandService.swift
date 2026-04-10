@@ -10,10 +10,45 @@ import Observation
 
 /// Resultado de un comando de voz detectado
 enum VoiceCommand: Equatable {
-    case sos                        // "emergencia", "socorro", "ayuda"
-    case distress(String)           // "me duele la cabeza", "no puedo respirar", etc.
-    case yes                        // "sí", "bien"
-    case no                         // "no"
+    case sos
+    case distress(String)
+    case yes
+    case no
+    case navigate(TabDestination)
+    case action(VoiceAction)
+    
+    static func == (lhs: VoiceCommand, rhs: VoiceCommand) -> Bool {
+        switch (lhs, rhs) {
+        case (.sos, .sos): return true
+        case (.distress(let a), .distress(let b)): return a == b
+        case (.yes, .yes): return true
+        case (.no, .no): return true
+        case (.navigate(let a), .navigate(let b)): return a == b
+        case (.action(let a), .action(let b)): return a == b
+        default: return false
+        }
+    }
+}
+
+/// Acciones de voz disponibles
+enum VoiceAction: String, CaseIterable {
+    case sendMessage
+    case triggerSOS
+    case call
+    case sendSMS
+    case playPattern
+    case help
+    
+    var description: String {
+        switch self {
+        case .sendMessage: return "Enviar mensaje"
+        case .triggerSOS: return "Activar SOS"
+        case .call: return "Hacer llamada"
+        case .sendSMS: return "Enviar SMS"
+        case .playPattern: return "Reproducir patrón"
+        case .help: return "Mostrar ayuda"
+        }
+    }
 }
 
 @Observable
@@ -59,24 +94,163 @@ final class VoiceCommandService {
         "no", "nada", "no quiero", "no gracias", "tampoco"
     ]
 
+    // MARK: - Comandos de navegación
+
+    private let navigateHomeKeywords = [
+        "ve a inicio", "ve al inicio", "ir a inicio", "ir al inicio",
+        "inicio", "pestaña inicio", "home", "volver al inicio",
+        "vámonos a inicio", "ve a casa", "regresa al inicio"
+    ]
+
+    private let navigatePatternsKeywords = [
+        "ve a patrones", "ve a patrón", "ir a patrones", "ir a patrón",
+        "patrones", "pestaña patrones", "modo julia", "vista julia",
+        "zonas táctiles", "vámonos a patrones", "patrón", "zonas"
+    ]
+
+    private let navigateEmergencyKeywords = [
+        "ve a emergencia", "ir a emergencia",
+        "pestaña emergencia", "emergencias",
+        "vámonos a emergencia", "modo emergencia", "pantalla emergencia",
+        "muestra emergencia", "abre emergencia"
+    ]
+
+    // MARK: - Comandos de acción
+
+    private let actionSOSKeywords = [
+        "haz emergencia", "activar emergencia", "botón rojo",
+        "sos", "llamar emergencia", "emergencia ahora",
+        "activar sos", "pánico", "ayuda urgente ahora"
+    ]
+
+    private let actionCallKeywords = [
+        "haz llamada", "llama", "llamar", "telefonear",
+        "comunicar", "comunícame", "llámame"
+    ]
+
+    private let actionSendMessageKeywords = [
+        "envía mensaje", "enviar mensaje", "mandar mensaje",
+        "manda mensaje", "escribe", "escribir mensaje"
+    ]
+
+    private let actionSendSMSKeywords = [
+        "envía sms", "enviar sms", "mandar sms", "manda sms",
+        "mensaje de texto", "texto"
+    ]
+
+    private let actionPlayPatternKeywords = [
+        "reproduce", "reproducir", "tocar", "tocar patrón",
+        "muestra el patrón", "cómo se siente", "ver patrón"
+    ]
+
+    private let actionHelpKeywords = [
+        "qué puedes hacer", "comandos", "lista de comandos",
+        "dime los comandos", "qué hago", "cómo uso esto"
+    ]
+
     // MARK: - Detectar comando en texto
 
-    /// Analiza el transcript y devuelve el comando detectado, si hay alguno.
-    /// Prioridad: SOS > malestar > sí/no
     func detectCommand(in transcript: String) -> VoiceCommand? {
         let text = transcript.lowercased()
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !text.isEmpty else { return nil }
 
-        // 1. SOS — prioridad máxima
+        if let nav = detectNavigation(in: text) {
+            return .navigate(nav)
+        }
+
+        if let action = detectAction(in: text) {
+            return .action(action)
+        }
+
+        if let sos = detectSOS(in: text) {
+            return sos
+        }
+
+        if let distress = detectDistress(in: text) {
+            return distress
+        }
+
+        if let yesNo = detectYesNo(in: text) {
+            return yesNo
+        }
+
+        return nil
+    }
+
+    private func detectNavigation(in text: String) -> TabDestination? {
+        for keyword in navigateHomeKeywords {
+            if text.contains(keyword) {
+                return .home
+            }
+        }
+
+        for keyword in navigatePatternsKeywords {
+            if text.contains(keyword) {
+                return .patterns
+            }
+        }
+
+        for keyword in navigateEmergencyKeywords {
+            if text.contains(keyword) {
+                return .emergency
+            }
+        }
+
+        return nil
+    }
+
+    private func detectAction(in text: String) -> VoiceAction? {
+        for keyword in actionSOSKeywords {
+            if text.contains(keyword) {
+                return .triggerSOS
+            }
+        }
+
+        for keyword in actionCallKeywords {
+            if text.contains(keyword) {
+                return .call
+            }
+        }
+
+        for keyword in actionSendMessageKeywords {
+            if text.contains(keyword) {
+                return .sendMessage
+            }
+        }
+
+        for keyword in actionSendSMSKeywords {
+            if text.contains(keyword) {
+                return .sendSMS
+            }
+        }
+
+        for keyword in actionPlayPatternKeywords {
+            if text.contains(keyword) {
+                return .playPattern
+            }
+        }
+
+        for keyword in actionHelpKeywords {
+            if text.contains(keyword) {
+                return .help
+            }
+        }
+
+        return nil
+    }
+
+    private func detectSOS(in text: String) -> VoiceCommand? {
         for keyword in sosKeywords {
             if text.contains(keyword) {
                 return .sos
             }
         }
+        return nil
+    }
 
-        // 2. Mensajes de malestar
+    private func detectDistress(in text: String) -> VoiceCommand? {
         for pattern in distressPatterns {
             for keyword in pattern.keywords {
                 if text.contains(keyword) {
@@ -84,10 +258,10 @@ final class VoiceCommandService {
                 }
             }
         }
+        return nil
+    }
 
-        // 3. Respuestas simples
-        //    Para "yes": acepta frases completas como "estoy bien", "me siento bien"
-        //    Para "no": solo frases cortas para evitar falsos positivos
+    private func detectYesNo(in text: String) -> VoiceCommand? {
         for keyword in yesKeywords {
             if text == keyword || text.hasSuffix(" \(keyword)") || text.hasPrefix("\(keyword) ") {
                 return .yes
@@ -104,5 +278,15 @@ final class VoiceCommandService {
         }
 
         return nil
+    }
+
+    func getAvailableCommands() -> [String] {
+        return [
+            "Navegación: 've a inicio', 've a patrones', 've a emergencia'",
+            "Emergencia: 'emergencia', 'socorro', 'ayuda'",
+            "Malestar: 'me duele la cabeza', 'no puedo respirar'",
+            "Respuestas: 'sí', 'no', 'bien', 'mal'",
+            "Acciones: 'haz emergencia', 'haz llamada', 'ayuda'"
+        ]
     }
 }

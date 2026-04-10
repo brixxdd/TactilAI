@@ -2,10 +2,12 @@
 // TactilAI
 //
 // TabView principal con las 3 pestañas de la app.
+// Soporta navegación programática via AppState para comandos de voz.
 
 import SwiftUI
 
 struct MainTabView: View {
+    @State private var appState = AppState.shared
 
     init() {
         let appearance = UITabBarAppearance()
@@ -17,26 +19,32 @@ struct MainTabView: View {
     }
 
     var body: some View {
-        TabView {
+        TabView(selection: $appState.selectedTab) {
             CaregiverView()
                 .tabItem {
                     Image(systemName: "house.fill")
                     Text("Inicio")
                 }
+                .tag(TabDestination.home)
 
             JuliaView()
                 .tabItem {
                     Image(systemName: "waveform")
                     Text("Patrones")
                 }
+                .tag(TabDestination.patterns)
 
             EmergencyView()
                 .tabItem {
                     Image(systemName: "exclamationmark.triangle.fill")
                     Text("Emergencia")
                 }
+                .tag(TabDestination.emergency)
         }
         .tint(Color(hex: "7B6EF6"))
+        .onChange(of: appState.selectedTab) { oldValue, newValue in
+            HapticEngine.shared.playPattern(for: newValue)
+        }
     }
 }
 

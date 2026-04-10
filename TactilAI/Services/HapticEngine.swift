@@ -200,9 +200,42 @@ final class HapticEngine {
 
     // MARK: - Detener
 
-    /// Detiene el motor háptico y libera recursos.
     func stop() {
         engine?.stop(completionHandler: { _ in })
         isReady = false
+    }
+
+    // MARK: - Reproducir por TabDestination (para navegación por voz)
+
+    func playPattern(for destination: TabDestination) {
+        switch destination {
+        case .home:
+            play(word: "Bien")
+        case .patterns:
+            play(word: "Sí")
+        case .emergency:
+            play(word: "Pánico")
+        }
+    }
+
+    func playNavigationFeedback() {
+        let gen = UIImpactFeedbackGenerator(style: .rigid)
+        gen.prepare()
+        gen.impactOccurred(intensity: 0.7)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+            gen.impactOccurred(intensity: 0.5)
+        }
+    }
+
+    func playVoiceActivatedFeedback() {
+        let gen = UIImpactFeedbackGenerator(style: .medium)
+        gen.prepare()
+        gen.impactOccurred()
+    }
+
+    func playTripleTapFeedback() {
+        let gen = UIImpactFeedbackGenerator(style: .heavy)
+        gen.prepare()
+        gen.impactOccurred(intensity: 1.0)
     }
 }
